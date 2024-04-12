@@ -4,13 +4,13 @@ pragma solidity >=0.8.2 <0.9.0;
 // Imports
 import "./PriceConverter.sol";
 //Error Codes
-error FundMe_NotOwner();
-error FundMe_NotSuccesful();
+error FundMe__NotOwner();
+error FundMe__NotSuccesful();
 
 //Interfaces, Libraries, Contracts
 
 /**
- * @title A contract for crowdfunding
+ * @title A contract for crowd funding
  * @author Adil Tükenmez
  * @notice This contract is to demo a sample funding contract
  * @dev
@@ -20,24 +20,23 @@ contract FundMe {
     using PriceConverter for uint256;
 
     // State Variables
-    mapping(address => uint256) public addressToAmountFunded;
+    mapping(address => uint256) private s_addressToAmountFunded;
+    address[] private s_funders;
+    address private immutable i_owner;
     uint256 public constant MINIMUM_USD = 50 * 1e18; //1 x 10*18
-    address[] public funders;
-    address public immutable i_owner;
-
-    AggregatorV3Interface public priceFeed;
+    AggregatorV3Interface private s_priceFeed;
 
     modifier onlyOwner() {
         // require(msg.sender == i_owner, "Sender is not owner!");
         if (msg.sender != i_owner) {
-            revert FundMe_NotOwner();
+            revert FundMe__NotOwner();
         } // This is more gas efficient than "require"
         _; //Representing rest of the code
     }
 
     constructor(address priceFeedAddress) {
         i_owner = msg.sender;
-        priceFeed = AggregatorV3Interface(priceFeedAddress);
+        s_priceFeed = AggregatorV3Interface(priceFeedAddress);
     }
 
     receive() external payable {
@@ -58,61 +57,72 @@ contract FundMe {
     function fund() public payable {
         // sending funds to a contract
         require(
-            msg.value.getConversionRate(priceFeed) >= MINIMUM_USD,
+            msg.value.getConversionRate(s_priceFeed) >= MINIMUM_USD,
             "Didn't send enough ETH!"
         ); //1e18 = 1 x 10*18 == 1000000000000000000 Wei == 1 1000000000 Gwei = 1 Ether
-        funders.push(msg.sender);
-        addressToAmountFunded[msg.sender] = msg.value;
+        s_funders.push(msg.sender);
+        s_addressToAmountFunded[msg.sender] = msg.value;
     }
+
+    /**
+     * @notice this function lets the owner the withdraw the money from the contract
+     */
 
     //Should only work for project owner
     function withdraw() public onlyOwner {
         // reset the investment value of funders
         for (
             uint256 funderIndex = 0;
-            funderIndex < funders.length;
+            funderIndex < s_funders.length;
             funderIndex++
         ) {
-            address funder = funders[funderIndex];
-            addressToAmountFunded[funder] = 0;
+            address funder = s_funders[funderIndex];
+            s_addressToAmountFunded[funder] = 0;
         }
         // reset the funders array
-        funders = new address[](0);
+        s_funders = new address[](0);
         // withdrawing the funds
-
-        // transfer
-        /*
-        payable(msg.sender).transfer(address(this).balance);
-        */
-        // send
-        /*
-        bool sendSuccess = payable(msg.sender).send(address(this).balance);
-        require(sendSuccess, "Send failed");
-        */
-        // using call (RECOMMENDED)
         (bool callSuccess, ) = payable(msg.sender).call{
             value: address(this).balance
         }("");
         // require(callSuccess, "Call failed");
         if (callSuccess != true) {
-            revert FundMe_NotSuccesful();
+            revert FundMe__NotSuccesful();
         }
     }
-    /*
-    function transferInvestment() external {
-        require(msg.sender == projectOwner, "Only project owner can transfer investment.");
-        require(totalInvestment >= investmentThreshold, "Investment threshold has not been reached yet.");
-        
-        payable(projectOwner).transfer(totalInvestment);
+
+    function cheaperWithdraw() public onlyOwner {
+        address[] memory funders = s_funders;
+        // mappings can't be in memory, sorry!
+        for (
+            uint256 funderIndex = 0;
+            funderIndex < funders.length;
+            funderIndex++
+        ) {
+            address funder = funders[funderIndex];
+            s_addressToAmountFunded[funder] = 0;
+        }
+        s_funders = new address[](0);
+        // payable(msg.sender).transfer(address(this).balance);
+        (bool success, ) = i_owner.call{value: address(this).balance}("");
+        require(success);
     }
 
-    function refundInvestment() external {
-        require(totalInvestment < investmentThreshold, "Investment threshold exceeded, refund cannot be made.");
-        require(investments[msg.sender] > 0, "No investment found.");
-        
-        uint refundAmount = investments[msg.sender];
-        investments[msg.sender] = 0;
-        payable(msg.sender).transfer(refundAmount);
+    function getOwner() public view returns (address) {
+        return i_owner;
     }
-    */
+
+    function getFunder(uint256 index) public view returns (address) {
+        return s_funders[index];
+    }
+
+    function getAddressToAmountFunded(
+        address funder
+    ) public view returns (uint256) {
+        return s_addressToAmountFunded[funder];
+    }
+
+    function getPriceFeed() public view returns (AggregatorV3Interface) {
+        return s_priceFeed;
+    }
 }
