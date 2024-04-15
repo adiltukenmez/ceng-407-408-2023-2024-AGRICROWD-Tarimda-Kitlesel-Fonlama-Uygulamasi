@@ -18,11 +18,11 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
         ethUsdPriceFeedAddress = networkConfig[chainId]["ethUsdPriceFeed"];
     }
 
-    // when going for localhost or hardhat network we want to use a mock
+    // When deploying to a local network or Hardhat network, use a mock price feed
     const args = [ethUsdPriceFeedAddress];
-    const fundMe = await deploy("FundMe", {
+    const agricrowd = await deploy("Agricrowd", {
         from: deployer,
-        args: args, //put price feed adrres
+        args: args,
         log: true,
         waitConfirmations: network.config.blockConfirmations || 1,
     });
@@ -31,10 +31,10 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
         !developmentChains.includes(network.name) &&
         process.env.ETHERSCAN_API_KEY
     ) {
-        await verify(fundMe.address, args);
+        await verify(agricrowd.address, args);
     }
 
     log("__________________________________________________________");
 };
 
-module.exports.tags = ["all", "fundme"];
+module.exports.tags = ["all", "agricrowd"];

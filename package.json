@@ -17,7 +17,7 @@
     "@typechain/hardhat": "^9.0.0",
     "chai": "^4.2.0",
     "ethers": "^6.11.1",
-    "hardhat": "^2.22.1",
+    "hardhat": "^2.22.2",
     "hardhat-deploy": "^0.12.2",
     "hardhat-deploy-ethers": "^0.4.1",
     "hardhat-gas-reporter": "^2.0.2",
@@ -31,7 +31,6 @@
     "git": "^0.1.5",
     "solhint": "^4.5.2"
   },
-
   "scripts": {
     "test": "yarn hardhat test",
     "test:staging": "yarn hardhat test --network sepolia",
