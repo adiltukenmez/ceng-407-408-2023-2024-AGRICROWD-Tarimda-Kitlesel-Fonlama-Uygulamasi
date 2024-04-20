@@ -71,9 +71,9 @@ contract Agricrowd {
         uint fundedAmountAfterCommission = msg.value - platformCommission;
 
         // Update project data
-        project.amountFundedETH += msg.value;
-        project.amountFundedUSD += ethToUsd(msg.value);
-        project.funds[msg.sender] += msg.value;
+        project.amountFundedETH += fundedAmountAfterCommission;
+        project.amountFundedUSD += ethToUsd(fundedAmountAfterCommission);
+        project.funds[msg.sender] += fundedAmountAfterCommission;
 
         // Update total commission
         totalCommission += platformCommission;
@@ -81,7 +81,7 @@ contract Agricrowd {
         // Transfer platform commission to platform address
         payable(i_platformOwner).transfer(platformCommission);
 
-        emit ProjectFunded(projectId, msg.sender, msg.value);
+        emit ProjectFunded(projectId, msg.sender, fundedAmountAfterCommission);
     }
 
     // Function to donate a project
