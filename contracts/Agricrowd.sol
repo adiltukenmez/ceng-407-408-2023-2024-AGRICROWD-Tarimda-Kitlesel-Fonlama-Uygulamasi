@@ -133,6 +133,12 @@ contract Agricrowd {
         emit CommissionWithdrawn(i_platformOwner, commissionToWithdraw);
     }
     */
+
+    // Function to get the total commission amount
+    function getTotalCommissionAmount() external view returns (uint256) {
+        return totalCommission;
+    }
+
     // Function to convert USD to ETH
     function usdToEth(uint _usdAmount) internal view returns (uint) {
         (, int price, , , ) = s_ethUsdPriceFeed.latestRoundData();
