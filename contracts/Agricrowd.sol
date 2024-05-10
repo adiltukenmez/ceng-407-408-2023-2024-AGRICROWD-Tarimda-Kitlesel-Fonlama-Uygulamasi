@@ -18,6 +18,7 @@ contract Agricrowd {
 
     mapping(address => uint[]) public investeeProjects; // Mapping of investee addresses to their project IDs
     mapping(uint => Project) public projects; // Mapping of project IDs to projects
+    mapping(string => uint) public objectIdToProjectId; // Mapping of MongoDB ObjectId to smart contract project ID
     uint256 public numProjects; // Total number of projects
     AggregatorV3Interface internal s_ethUsdPriceFeed; // Chainlink ETH/USD price feed contract
     uint256 public ethUsdPriceDecimal = 10 ** 18; // 18 decimal places for Chainlink ETH/USD price feed
@@ -42,7 +43,7 @@ contract Agricrowd {
     }
 
     // Function to create a new project
-    function createProject(uint _fundingGoalETH) external {
+    function createProject(string memory mongoDbObjectId, uint _fundingGoalETH) external {
         uint projectId = numProjects++;
         Project storage newProject = projects[projectId];
         newProject.investee = msg.sender;
@@ -57,10 +58,14 @@ contract Agricrowd {
             newProject.fundingGoalUSD,
             _fundingGoalETH
         );
+
+        // Update mapping with MongoDB ObjectId and smart contract project ID
+        objectIdToProjectId[mongoDbObjectId] = projectId;
     }
 
     // Function to fund a project
-    function fundProject(uint projectId) external payable {
+    function fundProject(string memory mongoDbObjectId) external payable {
+        uint projectId = objectIdToProjectId[mongoDbObjectId];
         require(projectId < numProjects, "Invalid project ID");
         Project storage project = projects[projectId];
         require(msg.value > 0, "Funding amount must be greater than 0");
@@ -85,7 +90,8 @@ contract Agricrowd {
     }
 
     // Function to donate a project
-    function donateProject(uint projectId) external payable {
+    function donateProject(string memory mongoDbObjectId) external payable {
+        uint projectId = objectIdToProjectId[mongoDbObjectId];
         require(projectId < numProjects, "Invalid project ID");
         Project storage project = projects[projectId];
         require(msg.value > 0, "Donation amount must be greater than 0");
@@ -93,11 +99,16 @@ contract Agricrowd {
         project.amountDonatedUSD += ethToUsd(msg.value);
         project.donations[msg.sender] += msg.value;
 
+        // Also update the funded amounts since a donation is considered a form of funding
+        project.amountFundedETH += msg.value;
+        project.amountFundedUSD += ethToUsd(msg.value);
+
         emit ProjectDonated(projectId, msg.sender, msg.value);
     }
 
     // Function to withdraw funds once funding goal is reached
-    function withdrawFunds(uint projectId) external {
+    function withdrawFunds(string memory mongoDbObjectId) external {
+        uint projectId = objectIdToProjectId[mongoDbObjectId];
         require(projectId < numProjects, "Invalid project ID");
         Project storage project = projects[projectId];
         require(
@@ -157,8 +168,9 @@ contract Agricrowd {
 
     // Function to get details of a project
     function getProjectDetails(
-        uint projectId
+        string memory mongoDbObjectId
     ) external view returns (address, uint, uint, uint, uint, uint, uint) {
+        uint projectId = objectIdToProjectId[mongoDbObjectId];
         require(projectId < numProjects, "Invalid project ID");
         Project storage project = projects[projectId];
         return (
