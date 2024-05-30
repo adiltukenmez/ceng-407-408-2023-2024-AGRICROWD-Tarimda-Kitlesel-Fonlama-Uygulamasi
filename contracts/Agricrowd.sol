@@ -222,34 +222,39 @@ contract Agricrowd {
     }
 
     // Function to send rewards to funders
-    function sendReward(string memory mongoDbObjectId) external payable{
+    function sendReward(string memory mongoDbObjectId) external payable {
         uint projectId = objectIdToProjectId[mongoDbObjectId];
         require(projectId < numProjects, "Invalid project ID");
         Project storage project = projects[projectId];
         require(msg.sender == project.investee, "Only project owner can send rewards");
-        require(
-            project.amountFundedETH >= project.fundingGoalETH,
-            "Funding goal not reached"
-        );
-        // Calculate total reward amount
+        require(project.amountFundedETH >= project.fundingGoalETH, "Funding goal not reached");
+
+        // Calculate total reward amount needed
         uint totalRewardAmount = 0;
         for (uint i = 0; i < project.funders.length; i++) {
             address funder = project.funders[i];
-            uint fundPercentage = (project.funds[funder] * 100) / project.amountFundedETH;
-            uint rewardAmount = (fundPercentage * project.amountFundedETH) / 100;
-            totalRewardAmount += rewardAmount;
+            uint fundAmount = project.funds[funder];
+            uint rewardAmount = fundAmount * 10 / 100;
+            totalRewards[funder] += rewardAmount;
+            totalRewardAmount += (fundAmount + rewardAmount);
         }
-        // Ensure the contract has received enough funds from the project owner
+
+        // Ensure the project owner sent enough ETH to cover the total rewards
         require(msg.value >= totalRewardAmount, "Insufficient reward amount sent by project owner");
 
         // Distribute rewards to funders
         for (uint i = 0; i < project.funders.length; i++) {
             address funder = project.funders[i];
-            uint fundPercentage = (project.funds[funder] * 100) / project.amountFundedETH;
-            uint rewardAmount = (fundPercentage * project.amountFundedETH) / 100;
-            payable(funder).transfer(rewardAmount);
+            uint fundAmount = project.funds[funder];
+            uint rewardAmount = fundAmount * 10 / 100;
+            payable(funder).transfer(fundAmount + rewardAmount);
         }
 
+        // If there's any excess ETH sent by the project owner, refund it
+        uint excessAmount = msg.value - totalRewardAmount;
+        if (excessAmount > 0) {
+            payable(project.investee).transfer(excessAmount);
+        }
     }
 }
 
