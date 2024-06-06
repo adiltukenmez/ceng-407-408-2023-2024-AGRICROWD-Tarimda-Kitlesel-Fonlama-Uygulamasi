@@ -6,12 +6,14 @@ import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 contract Agricrowd {
     struct Project {
         address investee; // Metamask address of the investee
+        string projectName; // Name of the project
         uint256 fundingGoalUSD; // Funding goal for the project in USD
         uint256 fundingGoalETH; // Funding goal for the project in ETH
         uint256 amountFundedUSD; // Total amount funded so far in USD
         uint256 amountFundedETH; // Total amount funded so far in ETH
         uint256 amountDonatedUSD; // Total amount donated so far in USD
         uint256 amountDonatedETH; // Total amount donated so far in ETH
+        uint256 rewardPercentage; // Reward Percentage of the Project
         mapping(address => uint256) funds; // Mapping of investor addresses to their contributions
         mapping(address => uint256) donations; // Mapping of investor addresses to their donations
         address[] funders; // Array to store addresses of funders
@@ -32,9 +34,12 @@ contract Agricrowd {
     event ProjectCreated(
         uint projectId,
         address investee,
+        string projectName,
         uint fundingGoalUSD,
-        uint fundingGoalETH
+        uint fundingGoalETH,
+        uint256 rewardPercentage
     );
+
     event ProjectFunded(uint projectId, address investor, uint amount);
     event ProjectDonated(uint projectId, address invesotr, uint amount);
     event RewardSent(address funder, uint reward);
@@ -45,23 +50,26 @@ contract Agricrowd {
     }
 
     // Function to create a new project
-    function createProject(string memory mongoDbObjectId, uint _fundingGoalETH) external {
+    function createProject(string memory mongoDbObjectId, string memory _projectName, uint _fundingGoalETH, uint256 _rewardPercentage) external {
         uint projectId = numProjects++;
         Project storage newProject = projects[projectId];
         newProject.investee = msg.sender;
+        newProject.projectName = _projectName; // Store project name
         newProject.fundingGoalUSD = ethToUsd(_fundingGoalETH);
         newProject.fundingGoalETH = _fundingGoalETH;
         newProject.amountFundedUSD = 0;
         newProject.amountFundedETH = 0;
+        newProject.rewardPercentage = _rewardPercentage; // Store reward percentage
         investeeProjects[msg.sender].push(projectId);
         emit ProjectCreated(
             projectId,
             msg.sender,
+            _projectName,
             newProject.fundingGoalUSD,
-            _fundingGoalETH
+            _fundingGoalETH,
+            _rewardPercentage
         );
 
-        // Update mapping with MongoDB ObjectId and smart contract project ID
         objectIdToProjectId[mongoDbObjectId] = projectId;
     }
 
@@ -234,19 +242,19 @@ contract Agricrowd {
         for (uint i = 0; i < project.funders.length; i++) {
             address funder = project.funders[i];
             uint fundAmount = project.funds[funder];
-            uint rewardAmount = fundAmount * 10 / 100;
+            uint rewardAmount = (fundAmount * project.rewardPercentage) / 100; 
             totalRewards[funder] += rewardAmount;
             totalRewardAmount += (fundAmount + rewardAmount);
         }
 
-        // Ensure the project owner sent enough ETH to cover the total rewards
+        // Ensure the project owner sent enough ETH to cover the total rewards  
         require(msg.value >= totalRewardAmount, "Insufficient reward amount sent by project owner");
 
         // Distribute rewards to funders
         for (uint i = 0; i < project.funders.length; i++) {
             address funder = project.funders[i];
             uint fundAmount = project.funds[funder];
-            uint rewardAmount = fundAmount * 10 / 100;
+            uint rewardAmount = (fundAmount * project.rewardPercentage) / 100;
             payable(funder).transfer(fundAmount + rewardAmount);
         }
 
@@ -255,6 +263,34 @@ contract Agricrowd {
         if (excessAmount > 0) {
             payable(project.investee).transfer(excessAmount);
         }
+    }
+
+    // Function to get investments made by a specific address
+    function getInvestmentsByAddress(address investor) external view returns (string[] memory, uint[] memory, uint[] memory, string[] memory) {
+        uint[] memory amounts = new uint[](numProjects);
+        uint[] memory rewards = new uint[](numProjects);
+        string[] memory projectNames = new string[](numProjects);
+        string[] memory objectIds = new string[](numProjects);
+
+        uint count = 0;
+        for (uint i = 0; i < numProjects; i++) {
+            Project storage project = projects[i];
+            if (project.funds[investor] > 0) {
+                amounts[count] = project.funds[investor];
+                rewards[count] = (project.funds[investor] * project.rewardPercentage) / 100; // Calculate reward directly in the return statement
+                projectNames[count] = project.projectName;
+                count++;
+            }
+        }
+
+        // Trim arrays to actual size
+        assembly {
+            mstore(amounts, count)
+            mstore(rewards, count)
+            mstore(projectNames, count)
+        }
+
+        return (objectIds, amounts, rewards, projectNames);
     }
 }
 
