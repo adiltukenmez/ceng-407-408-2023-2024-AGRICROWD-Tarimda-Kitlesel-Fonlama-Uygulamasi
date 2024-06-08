@@ -50,20 +50,26 @@ contract Agricrowd {
     }
 
     // Function to create a new project
-    function createProject(string memory mongoDbObjectId, string memory _projectName, uint _fundingGoalETH, uint256 _rewardPercentage) external {
+    function createProject(
+        string memory mongoDbObjectId,
+        string memory _projectName,
+        uint _fundingGoalETH,
+        uint256 _rewardPercentage,
+        address investeeAddress
+    ) external {
         uint projectId = numProjects++;
         Project storage newProject = projects[projectId];
-        newProject.investee = msg.sender;
+        newProject.investee = investeeAddress; // Use the provided investee address
         newProject.projectName = _projectName; // Store project name
         newProject.fundingGoalUSD = ethToUsd(_fundingGoalETH);
         newProject.fundingGoalETH = _fundingGoalETH;
         newProject.amountFundedUSD = 0;
         newProject.amountFundedETH = 0;
         newProject.rewardPercentage = _rewardPercentage; // Store reward percentage
-        investeeProjects[msg.sender].push(projectId);
+        investeeProjects[investeeAddress].push(projectId); // Use the provided investee address
         emit ProjectCreated(
             projectId,
-            msg.sender,
+            investeeAddress,
             _projectName,
             newProject.fundingGoalUSD,
             _fundingGoalETH,
@@ -72,6 +78,7 @@ contract Agricrowd {
 
         objectIdToProjectId[mongoDbObjectId] = projectId;
     }
+
 
     // Function to fund a project
     function fundProject(string memory mongoDbObjectId) external payable {
@@ -103,7 +110,7 @@ contract Agricrowd {
         emit ProjectFunded(projectId, msg.sender, fundedAmountAfterCommission);
     }
 
-    // Function to donate a project
+    // Function to donate to a project
     function donateProject(string memory mongoDbObjectId) external payable {
         uint projectId = objectIdToProjectId[mongoDbObjectId];
         require(projectId < numProjects, "Invalid project ID");
@@ -125,6 +132,12 @@ contract Agricrowd {
         project.amountFundedUSD += ethToUsd(msg.value);
 
         emit ProjectDonated(projectId, msg.sender, msg.value);
+
+        // Check if the funding goal is reached
+        if (project.amountFundedETH >= project.fundingGoalETH) {
+            // Transfer the donation amount directly to the project owner
+            payable(project.investee).transfer(msg.value);
+        }
     }
 
     // Function to withdraw funds once funding goal is reached
@@ -228,6 +241,24 @@ contract Agricrowd {
         }
         return (funders, funds);
     }
+
+    // Function to get donators and their donations for a project
+    function getDonatorsAndDonations(string memory mongoDbObjectId) external view returns (address[] memory, uint[] memory) {
+    uint projectId = objectIdToProjectId[mongoDbObjectId];
+    require(projectId < numProjects, "Invalid project ID");
+    Project storage project = projects[projectId];
+    uint numDonors = project.donors.length;
+    address[] memory donors = new address[](numDonors);
+    uint[] memory donations = new uint[](numDonors);
+    for (uint i = 0; i < numDonors; i++) {
+        address donor = project.donors[i];
+        uint donationAmount = project.donations[donor];
+        donors[i] = donor;
+        donations[i] = donationAmount;
+    }
+    return (donors, donations);
+    }
+
 
     // Function to send rewards to funders
     function sendReward(string memory mongoDbObjectId) external payable {
