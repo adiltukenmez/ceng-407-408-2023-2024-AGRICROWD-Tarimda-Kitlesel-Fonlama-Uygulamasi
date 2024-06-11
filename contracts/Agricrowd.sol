@@ -134,12 +134,20 @@ contract Agricrowd {
         project.amountFundedUSD += ethToUsd(msg.value);
 
         emit ProjectDonated(projectId, msg.sender, msg.value);
+    }
 
-        // Check if the funding goal is reached
-        if (project.amountFundedETH >= project.fundingGoalETH) {
-            // Transfer the donation amount directly to the project owner
-            payable(project.investee).transfer(msg.value);
-        }
+    // Function to donate after the funding goal is reached
+    function donateAfterFunded(string memory mongoDbObjectId) external payable {
+        uint projectId = objectIdToProjectId[mongoDbObjectId];
+        require(projectId < numProjects, "Invalid project ID");
+        Project storage project = projects[projectId];
+        require(
+            project.amountFundedETH >= project.fundingGoalETH,
+            "Funding goal not reached"
+        );
+
+        // Transfer donation to project owner
+        payable(project.investee).transfer(msg.value);
     }
 
     // Function to withdraw funds once funding goal is reached
