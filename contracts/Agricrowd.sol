@@ -13,6 +13,8 @@ contract Agricrowd {
         uint256 amountFundedETH; // Total amount funded so far in ETH
         uint256 amountDonatedUSD; // Total amount donated so far in USD
         uint256 amountDonatedETH; // Total amount donated so far in ETH
+        uint256 amountFundedToDisplayETH; // Total amount donated so far in ETH (To use after fundraise event)
+        uint256 amountFundedToDisplayUSD; // Total amount donated so far in USD (To use after fundraise event)
         uint256 rewardPercentage; // Reward Percentage of the Project
         mapping(address => uint256) funds; // Mapping of investor addresses to their contributions
         mapping(address => uint256) donations; // Mapping of investor addresses to their donations
@@ -96,6 +98,8 @@ contract Agricrowd {
         // Update project data
         project.amountFundedETH += fundedAmountAfterCommission;
         project.amountFundedUSD += ethToUsd(fundedAmountAfterCommission);
+        project.amountFundedToDisplayETH += fundedAmountAfterCommission;
+        project.amountFundedToDisplayUSD += ethToUsd(fundedAmountAfterCommission);
         project.funds[msg.sender] += fundedAmountAfterCommission;
         
         // Add funder to the list if not already added
@@ -132,6 +136,8 @@ contract Agricrowd {
         // Also update the funded amounts since a donation is considered a form of funding
         project.amountFundedETH += msg.value;
         project.amountFundedUSD += ethToUsd(msg.value);
+        project.amountFundedToDisplayETH += msg.value;
+        project.amountFundedToDisplayUSD += ethToUsd(msg.value);
 
         emit ProjectDonated(projectId, msg.sender, msg.value);
     }
@@ -145,9 +151,24 @@ contract Agricrowd {
             project.amountFundedETH >= project.fundingGoalETH,
             "Funding goal not reached"
         );
+        require(msg.value > 0, "Donation amount must be greater than 0");
+
+        // Update project data
+        project.amountDonatedETH += msg.value;
+        project.amountDonatedUSD += ethToUsd(msg.value);
+        project.amountFundedToDisplayETH += msg.value;
+        project.amountFundedToDisplayUSD += ethToUsd(msg.value);
+        project.donations[msg.sender] += msg.value;
+
+        // Add donor to the list if not already added
+        if (project.donations[msg.sender] == msg.value) {
+            project.donors.push(msg.sender);
+        }
 
         // Transfer donation to project owner
         payable(project.investee).transfer(msg.value);
+
+        emit ProjectDonated(projectId, msg.sender, msg.value);
     }
 
     // Function to withdraw funds once funding goal is reached
@@ -202,9 +223,11 @@ contract Agricrowd {
         uint amountFundedETH, 
         uint amountDonatedUSD, 
         uint amountDonatedETH,
+        uint amountFundedToDisplayETH,
+        uint amountFundedToDisplayUSD,
         address[] memory funders,
         address[] memory donors,
-        string memory status // Add status to return values
+        string memory status 
     ) {
         uint projectId = objectIdToProjectId[mongoDbObjectId];
         require(projectId < numProjects, "Invalid project ID");
@@ -217,9 +240,11 @@ contract Agricrowd {
             project.amountFundedETH,
             project.amountDonatedUSD,
             project.amountDonatedETH,
+            project.amountFundedToDisplayETH,
+            project.amountFundedToDisplayUSD,
             project.funders,
             project.donors,
-            project.status // Return project status
+            project.status 
         );
     }
 
@@ -350,5 +375,20 @@ contract Agricrowd {
         require(projectId < numProjects, "Invalid project ID");
         Project storage project = projects[projectId];
         return project.status;
+    }
+
+    // Function to withdraw commission funds
+    function withdrawCommissionFunds() external {
+        // Ensure there are commission funds available to withdraw
+        require(totalCommission > 0, "No commission funds available to withdraw");
+
+        // Get the commission amount to withdraw
+        uint256 commissionToWithdraw = totalCommission;
+
+        // Reset total commission amount to zero
+        totalCommission = 0;
+
+        // Transfer commission funds to the caller
+        payable(msg.sender).transfer(commissionToWithdraw);
     }
 }
