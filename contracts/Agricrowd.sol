@@ -18,6 +18,7 @@ contract Agricrowd {
         mapping(address => uint256) donations; // Mapping of investor addresses to their donations
         address[] funders; // Array to store addresses of funders
         address[] donors; // Array to store addresses of donors
+        string status; // Status of the project
     }
 
     mapping(address => uint[]) public investeeProjects; // Mapping of investee addresses to their project IDs
@@ -66,6 +67,7 @@ contract Agricrowd {
         newProject.amountFundedUSD = 0;
         newProject.amountFundedETH = 0;
         newProject.rewardPercentage = _rewardPercentage; // Store reward percentage
+        newProject.status = "Fundraising"; // Initialize status
         investeeProjects[investeeAddress].push(projectId); // Use the provided investee address
         emit ProjectCreated(
             projectId,
@@ -156,6 +158,7 @@ contract Agricrowd {
 
         // Transfer funds to project owner
         uint amountToWithdraw = project.amountFundedETH;
+        project.status = "Withdrawn"; // Update status to "Withdrawn"
         payable(project.investee).transfer(amountToWithdraw);
     }
 
@@ -192,7 +195,8 @@ contract Agricrowd {
         uint amountDonatedUSD, 
         uint amountDonatedETH,
         address[] memory funders,
-        address[] memory donors
+        address[] memory donors,
+        string memory status // Add status to return values
     ) {
         uint projectId = objectIdToProjectId[mongoDbObjectId];
         require(projectId < numProjects, "Invalid project ID");
@@ -206,7 +210,8 @@ contract Agricrowd {
             project.amountDonatedUSD,
             project.amountDonatedETH,
             project.funders,
-            project.donors
+            project.donors,
+            project.status // Return project status
         );
     }
 
@@ -244,21 +249,20 @@ contract Agricrowd {
 
     // Function to get donators and their donations for a project
     function getDonatorsAndDonations(string memory mongoDbObjectId) external view returns (address[] memory, uint[] memory) {
-    uint projectId = objectIdToProjectId[mongoDbObjectId];
-    require(projectId < numProjects, "Invalid project ID");
-    Project storage project = projects[projectId];
-    uint numDonors = project.donors.length;
-    address[] memory donors = new address[](numDonors);
-    uint[] memory donations = new uint[](numDonors);
-    for (uint i = 0; i < numDonors; i++) {
-        address donor = project.donors[i];
-        uint donationAmount = project.donations[donor];
-        donors[i] = donor;
-        donations[i] = donationAmount;
+        uint projectId = objectIdToProjectId[mongoDbObjectId];
+        require(projectId < numProjects, "Invalid project ID");
+        Project storage project = projects[projectId];
+        uint numDonors = project.donors.length;
+        address[] memory donors = new address[](numDonors);
+        uint[] memory donations = new uint[](numDonors);
+        for (uint i = 0; i < numDonors; i++) {
+            address donor = project.donors[i];
+            uint donationAmount = project.donations[donor];
+            donors[i] = donor;
+            donations[i] = donationAmount;
+        }
+        return (donors, donations);
     }
-    return (donors, donations);
-    }
-
 
     // Function to send rewards to funders
     function sendReward(string memory mongoDbObjectId) external payable {
@@ -288,6 +292,9 @@ contract Agricrowd {
             uint rewardAmount = (fundAmount * project.rewardPercentage) / 100;
             payable(funder).transfer(fundAmount + rewardAmount);
         }
+
+        // Update status to "Rewards Sent"
+        project.status = "Rewards Sent";
 
         // If there's any excess ETH sent by the project owner, refund it
         uint excessAmount = msg.value - totalRewardAmount;
@@ -323,5 +330,17 @@ contract Agricrowd {
 
         return (objectIds, amounts, rewards, projectNames);
     }
-}
 
+    // Function to get the total rewards of a specific address
+    function getTotalRewardsByAddress(address investor) external view returns (uint256) {
+        return totalRewards[investor];
+    }
+
+    // Function to fetch current status of a project
+    function getProjectStatus(string memory mongoDbObjectId) external view returns (string memory) {
+        uint projectId = objectIdToProjectId[mongoDbObjectId];
+        require(projectId < numProjects, "Invalid project ID");
+        Project storage project = projects[projectId];
+        return project.status;
+    }
+}
