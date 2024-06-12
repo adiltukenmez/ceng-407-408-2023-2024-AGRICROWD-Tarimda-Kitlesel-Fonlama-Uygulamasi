@@ -33,6 +33,7 @@ contract Agricrowd {
     uint256 public constant PLATFORM_COMMISSION_PERCENT = 5; // Platform commission percentage
     address private immutable i_platformOwner;
     uint256 public totalCommission;
+    address admin = 0xdF3e18d64BC6A983f673Ab319CCaE4f1a57C7097;
 
     event ProjectCreated(
         uint projectId,
@@ -111,7 +112,7 @@ contract Agricrowd {
         totalCommission += platformCommission;
 
         // Transfer platform commission to platform address
-        payable(i_platformOwner).transfer(platformCommission);
+        payable(admin).transfer(platformCommission);
 
         emit ProjectFunded(projectId, msg.sender, fundedAmountAfterCommission);
     }
@@ -337,11 +338,11 @@ contract Agricrowd {
     }
 
     // Function to get investments made by a specific address
-    function getInvestmentsByAddress(address investor) external view returns (string[] memory, uint[] memory, uint[] memory, string[] memory) {
+    function getInvestmentsByAddress(address investor) external view returns (uint[] memory, uint[] memory, string[] memory, string[] memory) {
         uint[] memory amounts = new uint[](numProjects);
         uint[] memory rewards = new uint[](numProjects);
         string[] memory projectNames = new string[](numProjects);
-        string[] memory objectIds = new string[](numProjects);
+        string[] memory statuses = new string[](numProjects);
 
         uint count = 0;
         for (uint i = 0; i < numProjects; i++) {
@@ -350,6 +351,7 @@ contract Agricrowd {
                 amounts[count] = project.funds[investor];
                 rewards[count] = (project.funds[investor] * project.rewardPercentage) / 100; // Calculate reward directly in the return statement
                 projectNames[count] = project.projectName;
+                statuses[count] = project.status;
                 count++;
             }
         }
@@ -359,10 +361,13 @@ contract Agricrowd {
             mstore(amounts, count)
             mstore(rewards, count)
             mstore(projectNames, count)
+            mstore(statuses, count)
         }
 
-        return (objectIds, amounts, rewards, projectNames);
+        return (amounts, rewards, projectNames, statuses);
     }
+
+
 
     // Function to get the total rewards of a specific address
     function getTotalRewardsByAddress(address investor) external view returns (uint256) {
@@ -377,18 +382,15 @@ contract Agricrowd {
         return project.status;
     }
 
-    // Function to withdraw commission funds
+    // Function to withdraw remaining contract balance
     function withdrawCommissionFunds() external {
-        // Ensure there are commission funds available to withdraw
-        require(totalCommission > 0, "No commission funds available to withdraw");
+        // Ensure there are funds available to withdraw
+        require(address(this).balance > 0, "No funds available to withdraw");
 
-        // Get the commission amount to withdraw
-        uint256 commissionToWithdraw = totalCommission;
+        // Get the remaining balance to withdraw
+        uint256 balanceToWithdraw = address(this).balance;
 
-        // Reset total commission amount to zero
-        totalCommission = 0;
-
-        // Transfer commission funds to the caller
-        payable(msg.sender).transfer(commissionToWithdraw);
+        // Transfer remaining balance to the caller
+        payable(msg.sender).transfer(balanceToWithdraw);
     }
 }
